@@ -53,7 +53,7 @@ def grid_values(grid):
     return dict(zip(boxes, values))
 
 
-def eliminate(values):
+def eliminate_new(values):
     """Eliminate values from peers of each box with a single value.
 
     Go through all the boxes, and whenever there is a box with a single value,
@@ -73,7 +73,7 @@ def eliminate(values):
 
 
 
-def eliminate_old(values):
+def eliminate(values):
     """Eliminate values from peers of each box with a single value.
 
     Go through all the boxes, and whenever there is a box with a single value,
@@ -89,24 +89,17 @@ def eliminate_old(values):
     
     for cur_box in boxes:
        
-        if len(new_dict[cur_box]) == 1:
-            #print('Unique value in:', cur_box, ' with value=', new_dict[cur_box])
-            
+        if len(values[cur_box]) == 1:
             # Loop over all peers, eliminate values[cur_box]
-            elim_val = new_dict[cur_box]
+            elim_val = values[cur_box]
             
             for cur_peer in peers[cur_box]:
-                if elim_val in new_dict[cur_peer]:
-                    #print('Must eliminate ', elim_val, ' from ', 
-                    #      cur_peer)
-                    #print('Eliminating ', elim_val, ' from ', new_dict[cur_peer])
-                    if len(new_dict[cur_peer]) > 1:
-                        new_dict[cur_peer] = new_dict[cur_peer].replace(elim_val, '')
-                    #print('After elimination, got: ', new_dict[cur_peer])
-                                       
+                if elim_val in values[cur_peer]:
+                    new_dict[cur_peer] = new_dict[cur_peer].replace(elim_val, '')
+                    
     return new_dict
 
-def only_choice(values):
+def only_choice_new(values):
     """Finalize all values that are the only choice for a unit.
 
     Go through all the units, and whenever there is a unit with a value
@@ -123,7 +116,7 @@ def only_choice(values):
     return values
 
 
-def only_choice_old(values):
+def only_choice(values):
     """Finalize all values that are the only choice for a unit.
 
     Go through all the units, and whenever there is a unit with a value
@@ -162,7 +155,7 @@ def only_choice_old(values):
         
     return new_values      
 
-def reduce_puzzle(values):
+def reduce_puzzle_new(values):
     """
     Iterate eliminate() and only_choice(). If at some point, there is a box with no available values, return False.
     If the sudoku is solved, return the sudoku.
@@ -190,7 +183,7 @@ def reduce_puzzle(values):
     return values
 
 
-def reduce_puzzle_old(in_values):
+def reduce_puzzle(in_values):
     # Defensive copy first
     values = in_values.copy()
     stalled = False
@@ -220,8 +213,8 @@ def reduce_puzzle_old(in_values):
         stalled = solved_values_before == solved_values_after
         # Sanity check, return False if there is a box with zero available values:
         if len([box for box in values.keys() if len(values[box]) == 0]):
-            print('Bad reduction')
-            display(values)
+            #print('Bad reduction')
+            #display(values)
             return False
         
         
