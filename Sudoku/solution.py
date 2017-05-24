@@ -64,6 +64,40 @@ def grid_values(grid):
     return dict(zip(boxes, values))
 
 
+def is_valid_solution(grid_dict):
+    """ Check a grid dictionary to see if represents a valid
+    solution to Sudoku. 
+    The constarainst must be valid, i.e. the peers of every box
+    must contain values distinct from the said box.
+    
+    Applicable to both standard and diagonal sudoku.
+    
+    """
+    
+    # Check no conflicts with peers
+    for cur_box in boxes:
+        if grid_dict[cur_box] in peers[cur_box]:
+            return False
+        
+    # Check no unfinished boxes
+    for cur_box in boxes:
+        if len(grid_dict[cur_box]) > 1:
+            return False
+        
+    # Check each digit appears exactly 9 times
+    hist = {str(digit) : 0 for digit in range(1, 10)}
+    for cur_box in boxes:
+        hist[grid_dict[cur_box]] += 1
+    vals = hist.values()
+    if max(vals) != 9 and min(vals) !=9:
+        return False
+        
+    # All checks passed ...    
+    return True
+
+    
+
+
 def eliminate_new(values):
     """Eliminate values from peers of each box with a single value.
 
@@ -79,7 +113,8 @@ def eliminate_new(values):
     for box in solved_values:
         digit = values[box]
         for peer in peers[box]:
-            values[peer] = values[peer].replace(digit,'')
+            assign_value(values, peer, values[peer].replace(digit,''))
+            
     return values
 
 
@@ -106,7 +141,7 @@ def eliminate(values):
             
             for cur_peer in peers[cur_box]:
                 if elim_val in values[cur_peer]:
-                    new_dict[cur_peer] = new_dict[cur_peer].replace(elim_val, '')
+                    assign_value(new_dict, cur_peer, new_dict[cur_peer].replace(elim_val,''))
                     
     return new_dict
 
@@ -123,7 +158,7 @@ def only_choice(values):
         for digit in '123456789':
             dplaces = [box for box in unit if digit in values[box]]
             if len(dplaces) == 1:
-                values[dplaces[0]] = digit
+                assign_value(values, dplaces[0], digit)
     return values
 
 
@@ -160,78 +195,36 @@ def only_choice_old(values):
             for val in unique_vals:
                 for cur_block_in_unit in cur_unit:
                     if str(val) in new_values[cur_block_in_unit]:
-                        new_values[cur_block_in_unit] = str(val)
+                        #new_values[cur_block_in_unit] = str(val)
+                        assign_value(new_values, cur_block_in_unit, str(val))
                     
             
         
     return new_values      
 
-def reduce_puzzle_new(values):
-    """
-    Iterate eliminate() and only_choice(). If at some point, there is a box with no available values, return False.
-    If the sudoku is solved, return the sudoku.
-    If after an iteration of both functions, the sudoku remains the same, return the sudoku.
-    Input: A sudoku in dictionary form.
-    Output: The resulting sudoku in dictionary form.
-    """
-    stalled = False
-    while not stalled:
-        # Check how many boxes have a determined value
-        solved_values_before = len([box for box in values.keys() if len(values[box]) == 1])
-        # Use the Eliminate Strategy
-        values = eliminate(values)
-        # Use the Only Choice Strategy
-        values = only_choice(values)
-        # Check how many boxes have a determined value, to compare
-        solved_values_after = len([box for box in values.keys() if len(values[box]) == 1])
-        # If no new values were added, stop the loop.
-        stalled = solved_values_before == solved_values_after
-        # Sanity check, return False if there is a box with zero available values:
-        if len([box for box in values.keys() if len(values[box]) == 0]):
-            #print('Bad reduction')
-            #display(values)
-            return False
-    return values
 
 
 def reduce_puzzle(in_values):
     # Defensive copy first
     values = in_values.copy()
     stalled = False
-    #ßprint('At start:')
-    #display(values)
-    
     
     while not stalled:
-        #print(' >>>>>>> Iteration: ', iter, ' <<<<<<<<<<<')
         # Check how many boxes have a determined value
         solved_values_before = len([box for box in values.keys() if len(values[box]) == 1])
-        #print('Solved values at start of iteration: ', solved_values_before)
-        # Your code here: Use the Eliminate Strategy
+
+        # Apply all heuristics
         values = eliminate(values)
-        #print('After elimination:')
-        #display(values)
-
-        # Your code here: Use the Only Choice Strategy
         values = only_choice(values)
-        
-        #print('Before naked twins:')
-        #print('\n')
-        #display(values)
         values = naked_twins(values)
-        #print('After naked twins:')
-        #display(values)
-        #print('\n')
-
+        
         # Check how many boxes have a determined value, to compare
         solved_values_after = len([box for box in values.keys() if len(values[box]) == 1])
-        #print('Solved values at end of iteration: ', solved_values_after)
-        # If no new values were added, stop the loop.
+        
         stalled = solved_values_before == solved_values_after
+        
         # Sanity check, return False if there is a box with zero available values:
         if len([box for box in values.keys() if len(values[box]) == 0]):
-            #print('Bad reduction')
-            #display(values)
             return False
         
         
@@ -240,27 +233,10 @@ def reduce_puzzle(in_values):
 
 
 
-def search(values):
-    "Using depth-first search and propagation, try all possible values."
-    # First, reduce the puzzle using the previous function
-    values = reduce_puzzle(values)
-    if values is False:
-        return False ## Failed earlier
-    if all(len(values[s]) == 1 for s in boxes): 
-        return values ## Solved!
-    # Choose one of the unfilled squares with the fewest possibilities
-    n,s = min((len(values[s]), s) for s in boxes if len(values[s]) > 1)
-    # Now use recurrence to solve each one of the resulting sudokus, and 
-    for value in values[s]:
-        new_sudoku = values.copy()
-        new_sudoku[s] = value
-        attempt = search(new_sudoku)
-        if attempt:
-            return attempt
 
 
 
-def search_old(in_values):
+def search(in_values):
     "Using depth-first search and propagation, create a search tree and solve the sudoku."
     # First, reduce the puzzle using the previous function    
     # Choose one of the unfilled squares with the fewest possibilities    
@@ -269,54 +245,50 @@ def search_old(in_values):
    
     # Are we done?
     # If so, there are no more unfinished boxes, and we can return
-    
     num_unfinished_boxes = len([box for box in in_values.keys() 
                                             if len(in_values[box]) > 1])
-    print('Number of unfinished boxes:', num_unfinished_boxes)
+    
     if num_unfinished_boxes == 0:
-        print('Puzzle solved.')
         return in_values
     
-    # OK, not done. Do recursion
+    # OK, not done. 
     
     # Reduce the board as much as possible
+    # If a bad board results, return to the previous
+    # point in the recursion
     values = reduce_puzzle(in_values)
     if values == False:
-        # Bad reduction, inconsistent board
         return False
     
     # Find the box with the smallest number of possibilities (but greater>1)
+    # Recurse through the possibilities of this box
     len_list = [ (box, len(values[box])) for box in values.keys() 
                                          if len(values[box]) > 1 ]
     
+    # It's possible the reduction has actually solved the puzzle.
+    # In that case, len_list is empty and we are done
     if len(len_list) < 1:
-        print('Puzzle solved after final reduction.')
         return values
     
+    # Non-empty list of candidates to expand
+    # Choose the one with the smallest number of digits
     min_element = min(len_list, key=lambda x : x[1])
-    #print(len_list)
-    #print('min_element: ', min_element)
     min_box = min_element[0]
     
+    # Recurse through possible values of this box
     for guess_value in values[min_box]:
-        #print('>>>> Guessing ', min_box, ' contains ', guess_value)
         guess_board = values.copy()
         guess_board[min_box] = guess_value
         
         res = search(guess_board)
         if not res:
             continue
-        #print('res: ', res)
+
         num_unfinished_boxes = len([box for box in res.keys() 
                                             if len(res[box]) > 1])
         if num_unfinished_boxes == 0:
-            #print('Returning from function ...')
             return res
     
-    # Shouldn't need to return from here, implies search failed.    
-    #print('returning from end ...')    
-    #return guess_board
-
 
 
 
@@ -402,6 +374,14 @@ def solve_standard_sudoku(grid):
         The dictionary representation of the final sudoku grid. False if no solution exists.
     """
     
+    # build standard Sudoku peers
+    # Override globals in case diagonal Sudoku had been previously run.
+    global unitlist 
+    unitlist = row_units + column_units + square_units
+    global units 
+    units = dict((s, [u for u in unitlist if s in u]) for s in boxes)
+    global peers 
+    peers = dict((s, set(sum(units[s],[]))-set([s])) for s in boxes)
     
     return search(grid_values(grid))
      
