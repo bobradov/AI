@@ -17,10 +17,14 @@ row_units    = [cross(r, cols) for r in rows]
 column_units = [cross(rows, c) for c in cols]
 square_units = [cross(rs, cs) for rs in ('ABC','DEF','GHI') for cs in ('123','456','789')]
 
+ # Diagonals
+back_slash   = [rows[index]+cs for index, cs in enumerate(cols) ]
+forw_slash   = [rows[8-index]+cs for index, cs in enumerate(cols)]
 
-
-# build standard Sudoku peers
-unitlist = row_units + column_units + square_units
+# build diagonal Sudoku peers
+# This is the default, as called by 'solve'
+# Using 'solve_standard_sudoku' to solve without diagonals
+unitlist = row_units + column_units + square_units + [back_slash] + [forw_slash]
 units = dict((s, [u for u in unitlist if s in u]) for s in boxes)
 peers = dict((s, set(sum(units[s],[]))-set([s])) for s in boxes)
 
@@ -64,6 +68,9 @@ def grid_values(grid):
     return dict(zip(boxes, values))
 
 
+# Added this function for running additional tests
+# In additional tests, solution is not know a priori
+# but possible check to validity of answer
 def is_valid_solution(grid_dict):
     """ Check a grid dictionary to see if represents a valid
     solution to Sudoku. 
@@ -98,25 +105,6 @@ def is_valid_solution(grid_dict):
     
 
 
-def eliminate_new(values):
-    """Eliminate values from peers of each box with a single value.
-
-    Go through all the boxes, and whenever there is a box with a single value,
-    eliminate this value from the set of values of all its peers.
-
-    Args:
-        values: Sudoku in dictionary form.
-    Returns:
-        Resulting Sudoku in dictionary form after eliminating values.
-    """
-    solved_values = [box for box in values.keys() if len(values[box]) == 1]
-    for box in solved_values:
-        digit = values[box]
-        for peer in peers[box]:
-            assign_value(values, peer, values[peer].replace(digit,''))
-            
-    return values
-
 
 
 def eliminate(values):
@@ -145,6 +133,11 @@ def eliminate(values):
                     
     return new_dict
 
+
+# This is the version of only_choice provided after 'unlocking' it
+# by providing a working version. The working version I used for this
+# is 'only_choice_old'. Gives the same answer, but is less efficient.
+# 
 def only_choice(values):
     """Finalize all values that are the only choice for a unit.
 
@@ -172,7 +165,7 @@ def only_choice_old(values):
     Output: Resulting Sudoku in dictionary form after filling in only choices.
     """
     
-    new_values = { key : values[key] for key in values  }
+    new_values = values.copy()
     
     for cur_block in units:
         for cur_unit in units[cur_block]:
@@ -205,6 +198,9 @@ def only_choice_old(values):
 
 
 def reduce_puzzle(in_values):
+    """Repeated application of the heuristics to reduce the board. 
+    Continues until no more simplification possible.
+    """
     # Defensive copy first
     values = in_values.copy()
     stalled = False
@@ -237,13 +233,8 @@ def reduce_puzzle(in_values):
 
 
 def search(in_values):
-    "Using depth-first search and propagation, create a search tree and solve the sudoku."
-    # First, reduce the puzzle using the previous function    
-    # Choose one of the unfilled squares with the fewest possibilities    
-    # Now use recursion to solve each one of the resulting sudokus, and if one returns a value (not False), return that answer!
-
-   
-    # Are we done?
+    "Using depth-first search and propagation, create a search tree and solve the sudoku."   
+    # Are we already done?
     # If so, there are no more unfinished boxes, and we can return
     num_unfinished_boxes = len([box for box in in_values.keys() 
                                             if len(in_values[box]) > 1])
@@ -311,9 +302,6 @@ def assign_value(values, box, value):
     return values
 
 
-
-
-
 def naked_twins(in_values):
     """Eliminate values using the naked twins strategy.
     Args:
@@ -339,8 +327,8 @@ def naked_twins(in_values):
                         for cur_box1 in pair_values 
                         for cur_box2 in peers[cur_box1] 
                         if values[cur_box1] == values[cur_box2] ]
-
-
+    
+   
         
     # Process pairs of naked twins
     for cur_twin in naked_twins:
@@ -351,22 +339,27 @@ def naked_twins(in_values):
         # Find all peers which can be replaced, i.e. not single
         # values or twins
         # To be replaceable, it must be a peer of both cur_box1 and cur_box2
+        # Also, no replacing of single-digit values (the twins should
+        # have been eliminated if they have a single-digit peer, but
+        # that may not be the sequence of operations)
         targets = [ cur_peer for cur_peer in peers[cur_box1] 
                                           if cur_peer in peers[cur_box2]
-                                          if len(values[cur_peer]) > 2]
+                                          if len(values[cur_peer]) > 1]
+        
         
         for peer_box in targets:
             for digit in digits:
-                values = assign_value(values, 
-                                      peer_box, 
-                                      values[peer_box].replace(digit,''))   
+                if digit in values[peer_box]:
+                    values = assign_value(values, 
+                                          peer_box, 
+                                          values[peer_box].replace(digit,''))   
                     
     return values
     
 
 def solve_standard_sudoku(grid):
     """
-    Find the solution to a standard Sudoku grid, i.e. one with diagonal constraints.
+    Find the solution to a standard Sudoku grid, i.e. one without diagonal constraints.
     Args:
         grid(string): a string representing a sudoku grid.
             Example: '2.............62....1....7...6..8...3...9...7...6..4...4....8....52.............3'
@@ -375,7 +368,7 @@ def solve_standard_sudoku(grid):
     """
     
     # build standard Sudoku peers
-    # Override globals in case diagonal Sudoku had been previously run.
+    # Override globals to use only standard Sudoku peers.
     global unitlist 
     unitlist = row_units + column_units + square_units
     global units 
@@ -397,45 +390,57 @@ def solve(grid):
     Returns:
         The dictionary representation of the final sudoku grid. False if no solution exists.
     """
-    
-    # Since the Sudoku rules for this solve include diagona constraints, 
-    # those must be added to the basic (global) variables.
-    # This is manifested as additional peers for diagonal elements.
-    # Specifically, each element of the diagonals has all the diagonal
-    # entries as peers.
-    
-    # Diagonals
-    back_slash   = [rows[index]+cs for index, cs in enumerate(cols) ]
-    forw_slash   = [rows[8-index]+cs for index, cs in enumerate(cols)]
-    global unitlist
-    #print('Unitlist:', unitlist)
-    #print('back_slash:', back_slash)
-    #print('forw_slash:', forw_slash)
-    
-    # Append to the global unitlist to include the diaginals
-    
-    unitlist.append(back_slash)
-    unitlist.append(forw_slash)
-    #print('final Unitlist:', unitlist)
-    #exit()
-    
-    global units
-    units = dict((s, [u for u in unitlist if s in u]) for s in boxes)
-    
-    global peers
-    peers = dict((s, set(sum(units[s],[]))-set([s])) for s in boxes)
-    
+    # Apply the recursive solution method
+    # Since no overrides to peers, it solves the diagonal Sudoku.
     return search(grid_values(grid))
+
+
 
 if __name__ == '__main__':
     diag_sudoku_grid = '2.............62....1....7...6..8...3...9...7...6..4...4....8....52.............3'
     
+    # basic test-cases
     print('\n\nstandard sudoku:\n\n')
     display(solve_standard_sudoku(diag_sudoku_grid))
     
     print('\n\ndiagonal sudoku:\n\n')
     display(solve(diag_sudoku_grid))
+    
+    
+    # Test naked twin with input from auto-grader
+    # Previous versions of the algorithm were failing on this testcase
+    # because they were not eliminating digits from two-digit entries
 
+    
+    nt_board = {"G7": "2345678", "G6": "1236789",  "G5": "23456789", "G4": "345678", 
+                "G3": "1234569", "G2": "12345678", "G1": "23456789", "G9": "24578", "G8": "345678", 
+                "C9": "124578",  "C8": "3456789",  "C3": "1234569",  "C2": "1234568", 
+                "C1": "2345689", "C7": "2345678",  "C6": "236789",  "C5": "23456789", "C4": "345678", 
+                "E5": "678",     "E4": "2",        "F1": "1", "F2": "24", "F3": "24", "F4": "9", 
+                "F5": "37",      "F6": "37", "F7": "58", "F8": "58", 
+                "F9": "6", "B4": "345678", "B5": "23456789", 
+                "B6": "236789", "B7": "2345678", "B1": "2345689", 
+                "B2": "1234568", "B3": "1234569", "B8": "3456789", 
+                "B9": "124578", "I9": "9", "I8": "345678", 
+                "I1": "2345678", "I3": "23456", "I2": "2345678", 
+                "I5": "2345678", "I4": "345678", "I7": "1", 
+                "I6": "23678", "A1": "2345689", "A3": "7", 
+                "A2": "234568", "E9": "3", "A4": "34568", 
+                "A7": "234568", "A6": "23689", "A9": "2458", 
+                "A8": "345689", "E7": "9", "E6": "4", "E1": 
+                "567", "E3": "56", "E2": "567", "E8": "1", "A5": "1", 
+                "H8": "345678", "H9": "24578", "H2": "12345678", "H3": "1234569", 
+                "H1": "23456789", "H6": "1236789", "H7": "2345678", "H4": "345678", 
+                "H5": "23456789", "D8": "2", "D9": "47", "D6": "5", "D7": "47", 
+                "D4": "1", "D5": "36", "D2": "9", "D3": "8", "D1": "36"}
+    
+    print('before naked twins:')
+    display(nt_board)
+    print('\n\nafter naked twins:')
+    new_vals = naked_twins(nt_board)
+    display(new_vals)
+    
+    # pygame not working on my setup, commenting out for now
    
 '''
     try:
