@@ -54,7 +54,7 @@ class UCS(object):
                     # Cost of new node is added to the total
                     # cost asscoaited with the path so far
                     # Add to observed nodes, don't return to them
-                    # Leave breadcrumbs to retrace our parth
+                    # Leave breadcrumbs to retrace our path
                     new_cost = cur_cost + neigh_cost
                     if neighbor not in best_cost.keys() or new_cost < best_cost[neighbor]:
                         best_cost[neighbor] = new_cost
@@ -79,7 +79,7 @@ if __name__ == "__main__":
     # Do some tests
     
     if len(sys.argv) == 1:
-        print('usage: bfs start end')
+        print('usage: ucs start end')
         exit()
         
     start = sys.argv[1]
