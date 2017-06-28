@@ -6,6 +6,8 @@ Created on Tue Jun 27 16:59:05 2017
 @author: bobradov
 """
 
+import math
+
 class GridWorld(object):
     ''' A grid in which the squares are occupied with various
     obstacles.
@@ -39,7 +41,7 @@ class GridWorld(object):
         for cur_y in range(ymin, ymax + 1):
             node_id = self.get_node_id(x, cur_y)
             self.grid[node_id] = val
-        print(self.grid)
+        #print(self.grid)
         
     def get_value(self, x, y):
         if x >= 0 and x < self.cols and y >= 0 and y < self.rows:
@@ -73,25 +75,56 @@ class GridWorld(object):
         
         retlist = []
         
+        scale = 10000
+        
         # Attempt to get horizontal moves
         val_right = self.get_value(x + 1, y)
         if val_right != None:
-            retlist.append((self.get_node_id(x + 1, y), val_right))
+            retlist.append((self.get_node_id(x + 1, y), scale*val_right + 1))
             
         val_left  = self.get_value(x - 1, y)
         if val_left != None:
-            retlist.append((self.get_node_id(x - 1, y), val_left))
+            retlist.append((self.get_node_id(x - 1, y), scale*val_left + 1))
             
         # Attempt vertical moves
         val_up = self.get_value(x, y - 1)
         if val_up != None:
-            retlist.append((self.get_node_id(x, y - 1), val_up))
+            retlist.append((self.get_node_id(x, y - 1), scale*val_up + 1))
             
         val_down  = self.get_value(x, y + 1)
         if val_down != None:
-            retlist.append((self.get_node_id(x, y + 1), val_down))
+            retlist.append((self.get_node_id(x, y + 1), scale*val_down + 1))
         
-        #print('Full retlist for node: ', retlist)
+        
+        
+        
+        # Attempt diagonal moves
+        diag_dist = math.sqrt(2.0)
+        
+        val_up_right = self.get_value(x + 1, y - 1)
+        if val_up_right != None:
+            retlist.append((self.get_node_id(x + 1, y - 1), 
+                            scale*val_up_right + diag_dist))
+            
+        val_up_left  = self.get_value(x - 1, y - 1)
+        if val_up_left != None:
+            retlist.append((self.get_node_id(x - 1, y - 1), 
+                            scale*val_up_left + diag_dist))
+            
+        val_down_right = self.get_value(x + 1, y + 1)
+        if val_down_right != None:
+            retlist.append((self.get_node_id(x + 1, y + 1), 
+                            scale*val_down_right + diag_dist))
+            
+        val_down_left  = self.get_value(x - 1, y + 1)
+        if val_down_left != None:
+            retlist.append((self.get_node_id(x - 1, y + 1), 
+                            scale*val_down_left + diag_dist))
+            
+        
+        
+        
+        
         return retlist
     
 if __name__ == '__main__':
