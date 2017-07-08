@@ -225,6 +225,51 @@ class AirCargoProblem(Problem):
 def build_expr(exp_type, arg1, arg2):
     return expr(exp_type + '('+ arg1 + ', ' + arg2+')') 
 
+
+def cargo_problem_list_builder(cargos, planes, airports, pos_At):
+    '''
+    Build 'positive' and 'negative' lists for cargo problems
+    
+    Input: cargos: list of cargos
+           planes: list of planes
+           airports: list of airports
+           pos_At: dictionary specifying locations of cargo and planes
+                   key of dict is a cargo or plane, value is 
+                   the airport location
+                   
+    Returns: tuple (pos, neg) of positive and negative lists
+    '''
+    pos = [ build_expr('At', cur_key, pos_At[cur_key])
+            for cur_key in pos_At.keys() ]
+    
+    
+    neg = []
+    
+    
+
+    neg_at_cargo_list = [build_expr('At', cur_cargo, cur_airport)
+                            for cur_cargo in cargos
+                            for cur_airport in airports
+                            if pos_At[cur_cargo] != cur_airport 
+                        ]
+    
+    neg_at_plane_list = [build_expr('At', cur_plane, cur_airport)
+                            for cur_plane in planes
+                            for cur_airport in airports
+                            if pos_At[cur_plane] != cur_airport
+                        ]
+
+    
+    neg_in_list = [build_expr('In', cur_cargo, cur_plane)
+                    for cur_cargo in cargos
+                    for cur_plane in planes
+                  ]
+    
+    neg = neg_at_cargo_list + neg_at_plane_list + neg_in_list
+    
+    return (pos, neg)
+    
+
 def air_cargo_p1() -> AirCargoProblem:
     '''
     Init(At(C1, SFO) ∧ At(C2, JFK) 
@@ -239,22 +284,15 @@ def air_cargo_p1() -> AirCargoProblem:
     cargos = ['C1', 'C2']
     planes = ['P1', 'P2']
     airports = ['JFK', 'SFO']
-    pos = [expr('At(C1, SFO)'),
-           expr('At(C2, JFK)'),
-           expr('At(P1, SFO)'),
-           expr('At(P2, JFK)'),
-           ]
     
-    neg = [expr('At(C2, SFO)'),
-           expr('In(C2, P1)'),
-           expr('In(C2, P2)'),
-           expr('At(C1, JFK)'),
-           expr('In(C1, P1)'),
-           expr('In(C1, P2)'),
-           expr('At(P1, JFK)'),
-           expr('At(P2, SFO)'),
-           ]
     
+    pos_At = { 'C1' : 'SFO',
+               'C2' : 'JFK',
+               'P1' : 'SFO',
+               'P2' : 'JFK' }
+    
+    
+    pos, neg = cargo_problem_list_builder(cargos, planes, airports, pos_At)
     
     init = FluentState(pos, neg)
     goal = [expr('At(C1, JFK)'),
@@ -290,41 +328,9 @@ def air_cargo_p2() -> AirCargoProblem:
                'P2' : 'JFK',
                'P3' : 'ATL' }
     
-    #pos = [ expr('At('+cur_key + ', ' + pos_At[cur_key]+')') 
-    #                    for cur_key in pos_At.keys() ]
+    pos, neg = cargo_problem_list_builder(cargos, planes, airports, pos_At)
     
-    pos = [ build_expr('At', cur_key, pos_At[cur_key])
-            for cur_key in pos_At.keys() ]
-    
-    
-    neg = []
-    
-    
-
-    neg_at_cargo_list = [build_expr('At', cur_cargo, cur_airport)
-                            for cur_cargo in cargos
-                            for cur_airport in airports
-                            if pos_At[cur_cargo] != cur_airport 
-                        ]
-    
-    neg_at_plane_list = [build_expr('At', cur_plane, cur_airport)
-                            for cur_plane in planes
-                            for cur_airport in airports
-                            if pos_At[cur_plane] != cur_airport
-                        ]
-
-    
-    neg_in_list = [build_expr('In', cur_cargo, cur_plane)
-                    for cur_cargo in cargos
-                    for cur_plane in planes
-                  ]
-    
-    neg = neg_at_cargo_list + neg_at_plane_list + neg_in_list
-    
-    
-    
-    
-    
+   
     
     init = FluentState(pos, neg)
     # List goals: C1 -> JFK and C2,C3 -> SFO
@@ -363,39 +369,11 @@ def air_cargo_p3() -> AirCargoProblem:
                'P1' : 'SFO',
                'P2' : 'JFK' }
     
+    
+    pos, neg = cargo_problem_list_builder(cargos, planes, airports, pos_At)
    
-    pos = [ build_expr('At', cur_key, pos_At[cur_key])
-            for cur_key in pos_At.keys() ]
-    
-    
-    neg = []
-    
-    
+   
 
-    neg_at_cargo_list = [build_expr('At', cur_cargo, cur_airport)
-                            for cur_cargo in cargos
-                            for cur_airport in airports
-                            if pos_At[cur_cargo] != cur_airport 
-                        ]
-    
-    neg_at_plane_list = [build_expr('At', cur_plane, cur_airport)
-                            for cur_plane in planes
-                            for cur_airport in airports
-                            if pos_At[cur_plane] != cur_airport
-                        ]
-
-    
-    neg_in_list = [build_expr('In', cur_cargo, cur_plane)
-                    for cur_cargo in cargos
-                    for cur_plane in planes
-                  ]
-    
-    neg = neg_at_cargo_list + neg_at_plane_list + neg_in_list
-    
-    
-    
-    
-    
     
     init = FluentState(pos, neg)
     # List goals: C1 -> JFK and C2,C3 -> SFO
