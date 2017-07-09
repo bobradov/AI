@@ -34,6 +34,12 @@ class AirCargoProblem(Problem):
         self.planes = planes
         self.airports = airports
         self.actions_list = self.get_actions()
+        
+        # Make a lookup dict for goal states in the state_map
+        # Indexed by goal fluent
+        # Contains index of item in state_map
+        self.goal_lookup = { cur_goal_item : self.state_map.index(cur_goal_item)
+                             for cur_goal_item in goal }
 
     def get_actions(self):
         """
@@ -218,9 +224,14 @@ class AirCargoProblem(Problem):
         executed.
         """
         # TODO implement (see Russell-Norvig Ed-3 10.2.3  or Russell-Norvig Ed-2 11.2)
-        count = 0
-        return count
-
+       
+        unmet_goal_list = [cur_fluent
+                           for cur_fluent in self.goal
+                           if node.state[self.goal_lookup[cur_fluent]] == 'F']
+        
+        return len(unmet_goal_list)
+        #return count
+        
 
 def build_expr(exp_type, arg1, arg2):
     return expr(exp_type + '('+ arg1 + ', ' + arg2+')') 
