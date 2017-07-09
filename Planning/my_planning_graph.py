@@ -554,6 +554,9 @@ class PlanningGraph():
         # TODO implement
         
         # For each goal in the problem, determine their level cost, then add them together
+        # This implementation assumes all goals are positive
+        # Is this a good assumption?
+        '''
         for goal in self.problem.goal:
             print('Working on goal ...', goal)
             goal_found = False
@@ -566,5 +569,17 @@ class PlanningGraph():
                         break
                 if goal_found:
                     break
-                
+        '''
+        found_goals = set()
+        while len(found_goals) < len(self.problem.goal):
+            for level, state_set in enumerate(self.s_levels):
+                # FIXME: may want to iterative over goals
+                # and check against states, instead of the other way around
+                for cur_state in state_set:
+                    if (cur_state.is_pos and cur_state.symbol in self.problem.goal 
+                                     and cur_state.symbol not in found_goals):
+                        found_goals.add(cur_state.symbol)
+                        level_sum += level
+            
+        
         return level_sum
