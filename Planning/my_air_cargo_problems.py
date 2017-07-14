@@ -257,7 +257,7 @@ class AirCargoProblem(Problem):
         condition.
         """
         # requires implemented PlanningGraph class
-        pg = PlanningGraph(self , node.state, inconsistent_effetcs_mutex=False,
+        pg = PlanningGraph(self , node.state, inconsistent_effects_mutex=False,
                                               competing_needs_mutex=False)
         pg_levelsum = pg.h_levelsum()
         return pg_levelsum
@@ -270,7 +270,7 @@ class AirCargoProblem(Problem):
         condition.
         """
         # requires implemented PlanningGraph class
-        pg = PlanningGraph(self , node.state, inconsistent_effetcs_mutex=False,
+        pg = PlanningGraph(self , node.state, inconsistent_effects_mutex=False,
                                               interference_mutex=False)
         pg_levelsum = pg.h_levelsum()
         return pg_levelsum
