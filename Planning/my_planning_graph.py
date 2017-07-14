@@ -3,6 +3,47 @@ from aimacode.search import Problem
 from aimacode.utils import expr
 from lp_utils import decode_state
 
+import time
+
+
+# Timer dictionary
+timer_dict = {}
+
+def add_to_timer(name, time_val):
+       
+    # First time calling timer?
+    if 'n' in timer_dict:
+        cur_n = timer_dict['n']
+        timer_dict['n'] = cur_n + 1
+    else:
+        timer_dict['n'] = 0
+    
+    if name in timer_dict:
+       #print('In timer, accing ', name)
+        cur_time = timer_dict[name]
+        timer_dict[name] = cur_time + time_val
+    else:
+        #print('In timer, adding ', name)
+        timer_dict[name] = time_val
+        
+    if int(timer_dict['n']) % 1000000 == 0:
+        print('Timer info:', ' count==', timer_dict['n'])
+        display_timer()
+            
+def display_timer():
+    tot_time = 0.0
+    for cur_key in timer_dict:
+        if cur_key == 'n':
+            continue
+        tot_time += timer_dict[cur_key]
+        
+    for cur_key in timer_dict:
+        if cur_key == 'n':
+            continue
+        print('Function: ', cur_key, ' time_frac=', 
+              timer_dict[cur_key]/tot_time)
+        
+        
 
 class PgNode():
     """Base class for planning graph nodes.
@@ -17,6 +58,12 @@ class PgNode():
         self.parents = set()
         self.children = set()
         self.mutex = set()
+        
+        
+        
+   
+        
+        
 
     def is_mutex(self, other) -> bool:
         """Boolean test for mutual exclusion
@@ -146,11 +193,16 @@ class PgNode_a(PgNode):
 
         :return: set of PgNode_s
         """
+        
+       
+        
         nodes = set()
         for p in self.action.precond_pos:
             nodes.add(PgNode_s(p, True))
         for p in self.action.precond_neg:
             nodes.add(PgNode_s(p, False))
+            
+            
         return nodes
 
     def effect_s_nodes(self):
@@ -160,11 +212,14 @@ class PgNode_a(PgNode):
 
         :return: set of PgNode_s
         """
+      
+        
         nodes = set()
         for e in self.action.effect_add:
             nodes.add(PgNode_s(e, True))
         for e in self.action.effect_rem:
             nodes.add(PgNode_s(e, False))
+        
         return nodes
 
     def __eq__(self, other):
@@ -203,7 +258,12 @@ class PlanningGraph():
     graph can be used to reason about 
     """
 
-    def __init__(self, problem: Problem, state: str, serial_planning=True):
+    def __init__(self, problem: Problem, state: str, 
+                 serial_planning=True,
+                 inconsistent_effects_mutex=True,
+                 interference_mutex=True,
+                 competing_needs_mutex=True
+                 ):
         """
         :param problem: PlanningProblem (or subclass such as AirCargoProblem or HaveCakeProblem)
         :param state: str (will be in form TFTTFF... representing fluent states)
@@ -215,13 +275,29 @@ class PlanningGraph():
             s_levels: list of sets of PgNode_s, where each set in the list represents an S-level in the planning graph
             a_levels: list of sets of PgNode_a, where each set in the list represents an A-level in the planning graph
         """
+        
+        
+        
+        
         self.problem = problem
         self.fs = decode_state(state, problem.state_map)
         self.serial = serial_planning
         self.all_actions = self.problem.actions_list + self.noop_actions(self.problem.state_map)
         self.s_levels = []
         self.a_levels = []
+        
+        # Flags for setting which mutexes to use
+        self.inconsistent_effects_mutex_flag = inconsistent_effects_mutex
+        self.interference_mutex_flag = interference_mutex
+        self.competing_needs_mutex_flag = competing_needs_mutex
+        
         self.create_graph()
+        
+        
+        
+    
+            
+            
 
     def noop_actions(self, literal_list):
         """create persistent action for each possible fluent
@@ -244,14 +320,20 @@ class PlanningGraph():
         :param literal_list:
         :return: list of Action
         """
+        start = time.time()
         action_list = []
         for fluent in literal_list:
             act1 = Action(expr("Noop_pos({})".format(fluent)), ([fluent], []), ([fluent], []))
             action_list.append(act1)
             act2 = Action(expr("Noop_neg({})".format(fluent)), ([], [fluent]), ([], [fluent]))
             action_list.append(act2)
+            
+        end = time.time()
+        add_to_timer('noop_actions', end-start)
+        
         return action_list
 
+    #@profile
     def create_graph(self):
         """ build a Planning Graph as described in Russell-Norvig 3rd Ed 10.3 or 2nd Ed 11.4
 
@@ -265,6 +347,8 @@ class PlanningGraph():
         :return:
             builds the graph by filling s_levels[] and a_levels[] lists with node sets for each level
         """
+        start = time.time()
+      
         # the graph should only be built during class construction
         if (len(self.s_levels) != 0) or (len(self.a_levels) != 0):
             raise Exception(
@@ -293,7 +377,11 @@ class PlanningGraph():
 
             if self.s_levels[level] == self.s_levels[level - 1]:
                 leveled = True
+                    
+        end = time.time()
+        add_to_timer('create_graph', end-start)
 
+    #@profile
     def add_action_level(self, level):
         """ add an A (action) level to the Planning Graph
 
@@ -311,6 +399,8 @@ class PlanningGraph():
         #   to see if a proposed PgNode_a has prenodes that are a subset of the previous S level.  Once an
         #   action node is added, it MUST be connected to the S node instances in the appropriate s_level set.
 
+        start = time.time()
+
         a_nodes = []
         for action in self.all_actions:
             # Build an action Node for this action
@@ -326,6 +416,9 @@ class PlanningGraph():
                     node_a.parents.add(node_s)
         # Build the action level from the reachable action nodes
         self.a_levels.append(a_nodes)
+        
+        end = time.time()
+        add_to_timer('add_action_level', end-start)
 
 
     def add_literal_level(self, level):
@@ -346,6 +439,8 @@ class PlanningGraph():
         #   all of the new S nodes as children of all the A nodes that could produce them, and likewise add the A nodes to the
         #   parent sets of the S nodes
         
+        start = time.time()
+        
         s_nodes = set()
         for node_a in self.a_levels[level - 1]:
             # Get the effect nodes for this preceding action and add them to the level's state nodes
@@ -358,7 +453,11 @@ class PlanningGraph():
                 node_a.children.add(node_s)
         # Build the state level from the reachable effect nodes
         self.s_levels.append(s_nodes)
+        
+        end = time.time()
+        add_to_timer('add_literal_level', end-start)
 
+    #@profile
     def update_a_mutex(self, nodeset):
         """ Determine and update sibling mutual exclusion for A-level nodes
 
@@ -374,14 +473,27 @@ class PlanningGraph():
         :return:
             mutex set in each PgNode_a in the set is appropriately updated
         """
+        
+        start = time.time()
+        
         nodelist = list(nodeset)
         for i, n1 in enumerate(nodelist[:-1]):
             for n2 in nodelist[i + 1:]:
-                if (self.serialize_actions(n1, n2) or
-                        self.inconsistent_effects_mutex(n1, n2) or
-                        self.interference_mutex(n1, n2) or
-                        self.competing_needs_mutex(n1, n2)):
+                if (self.serialize_actions(n1, n2)):
                     mutexify(n1, n2)
+                    continue
+                if (self.inconsistent_effects_mutex(n1, n2)):
+                    mutexify(n1, n2)
+                    continue
+                if (self.interference_mutex(n1, n2)):
+                    mutexify(n1, n2)
+                    continue
+                if (self.competing_needs_mutex(n1, n2)):
+                    mutexify(n1, n2)
+                    continue
+                    
+        end = time.time()
+        add_to_timer('update_a_mutex', end-start)
 
     def serialize_actions(self, node_a1: PgNode_a, node_a2: PgNode_a) -> bool:
         """
@@ -415,8 +527,12 @@ class PlanningGraph():
         :param node_a2: PgNode_a
         :return: bool
         """
+        
+        if not self.inconsistent_effects_mutex_flag: return False
+        
         # TODO test for Inconsistent Effects between nodes
         # Make sure node_a1's (+) effects aren't canceled by node_a2's (-) effects
+        # Convert to subset test
         for effect in node_a1.action.effect_add:
             if effect in node_a2.action.effect_rem:
                 return True
@@ -443,8 +559,14 @@ class PlanningGraph():
         :return: bool
         """
         # TODO test for Interference between nodes
-        # Make sure node_a1's (+) effects don't conflict with node_a2's (-) preconditions
-        # Make sure node_a2's (+) effects don't conflict with node_a1's (-) preconditions
+        
+        
+        if not self.interference_mutex_flag: return False
+        
+        
+        start = time.time()
+        
+        
         for effect in node_a1.action.effect_add:
             if effect in node_a2.action.precond_neg:
                 return True
@@ -460,9 +582,13 @@ class PlanningGraph():
         for effect in node_a2.action.effect_rem:
             if effect in node_a1.action.precond_pos:
                 return True
+            
+        end = time.time()
+        add_to_timer('interference_mutex', end-start)
 
         return False
 
+   # @profile
     def competing_needs_mutex(self, node_a1: PgNode_a, node_a2: PgNode_a) -> bool:
         """
         Test a pair of actions for mutual exclusion, returning True if one of
@@ -473,14 +599,21 @@ class PlanningGraph():
         :param node_a2: PgNode_a
         :return: bool
         """
-
+       
+        if not self.competing_needs_mutex_flag: return False
+        
         # TODO test for Competing Needs between nodes
         # Make sure node_a1's preconditions aren't mutually exclusive with node_a2's preconditions
+        start = time.time()
         for precond_a1 in node_a1.parents:
             for precond_a2 in node_a2.parents:
                 if precond_a1.is_mutex(precond_a2):
+                    end = time.time()
+                    add_to_timer('competing_nodes_mutex', end-start)
                     return True
 
+        end = time.time()
+        add_to_timer('competing_needes_mutex', end-start)
         return False
 
     def update_s_mutex(self, nodeset: set):
@@ -496,11 +629,19 @@ class PlanningGraph():
         :return:
             mutex set in each PgNode_a in the set is appropriately updated
         """
+        
+        start = time.time()
+        
         nodelist = list(nodeset)
         for i, n1 in enumerate(nodelist[:-1]):
             for n2 in nodelist[i + 1:]:
-                if self.negation_mutex(n1, n2) or self.inconsistent_support_mutex(n1, n2):
+                if (self.negation_mutex(n1, n2) or 
+                   self.inconsistent_support_mutex(n1, n2)):
                     mutexify(n1, n2)
+        
+        end = time.time()
+        add_to_timer('update_s_mutex', end-start)
+        
 
     def negation_mutex(self, node_s1: PgNode_s, node_s2: PgNode_s) -> bool:
         """
@@ -538,11 +679,19 @@ class PlanningGraph():
         """
         # TODO test for Inconsistent Support between nodes
         # Make sure node_s1's preconditions aren't mutually exclusive with node_s2's preconditions
+        
+        
+        start = time.time()
+        
         for precond_s1 in node_s1.parents:
             for precond_s2 in node_s2.parents:
                 if not precond_s1.is_mutex(precond_s2):
+                    end = time.time()
+                    add_to_timer('inconsistent_support_mutex', end-start)
                     return False
 
+        end = time.time()
+        add_to_timer('inconsistent_support_mutex', end-start)
         return True
 
     def h_levelsum(self) -> int:
@@ -556,19 +705,26 @@ class PlanningGraph():
         # For each goal in the problem, determine their level cost, then add them together
         # This implementation assumes all goals are positive
         # Is this a good assumption?
+        
+        
+        start = time.time()
+        
         '''
         for goal in self.problem.goal:
-            print('Working on goal ...', goal)
+            #print('Working on goal ...', goal)
             goal_found = False
             for level in range(len(self.s_levels)):
                 for state in self.s_levels[level]:
-                    print('Working on state ...', state.symbol)
+                    #print('Working on state ...', state.symbol)
                     if goal == state.symbol and state.is_pos:
                         goal_found = True
                         level_sum += level
                         break
                 if goal_found:
                     break
+                
+        
+        
         '''
         found_goals = set()
         while len(found_goals) < len(self.problem.goal):
@@ -576,10 +732,12 @@ class PlanningGraph():
                 # FIXME: may want to iterative over goals
                 # and check against states, instead of the other way around
                 for cur_state in state_set:
+                    # FIXME: may also need to check for negative goals
                     if (cur_state.is_pos and cur_state.symbol in self.problem.goal 
                                      and cur_state.symbol not in found_goals):
                         found_goals.add(cur_state.symbol)
                         level_sum += level
-            
-        
+           
+        end = time.time()
+        add_to_timer('h_levelsum', end-start)
         return level_sum

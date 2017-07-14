@@ -230,7 +230,52 @@ class AirCargoProblem(Problem):
                            if node.state[self.goal_lookup[cur_fluent]] == 'F']
         
         return len(unmet_goal_list)
-        #return count
+        
+    '''
+    self.incosistent_effects_mutex = inconsistent_effects_mutex
+        self.interference_mutex = interference_mutex
+        self.competing_needs_mutex = competing_needs_mutex
+    '''
+    @lru_cache(maxsize=8192)
+    def h_pg_levelsum_iem(self, node: Node):
+        """This heuristic uses a planning graph representation of the problem
+        state space to estimate the sum of all actions that must be carried
+        out from the current state in order to satisfy each individual goal
+        condition.
+        """
+        # requires implemented PlanningGraph class
+        pg = PlanningGraph(self , node.state, interference_mutex=False,
+                                             competing_needs_mutex=False)
+        pg_levelsum = pg.h_levelsum()
+        return pg_levelsum
+    
+    @lru_cache(maxsize=8192)
+    def h_pg_levelsum_int(self, node: Node):
+        """This heuristic uses a planning graph representation of the problem
+        state space to estimate the sum of all actions that must be carried
+        out from the current state in order to satisfy each individual goal
+        condition.
+        """
+        # requires implemented PlanningGraph class
+        pg = PlanningGraph(self , node.state, inconsistent_effetcs_mutex=False,
+                                              competing_needs_mutex=False)
+        pg_levelsum = pg.h_levelsum()
+        return pg_levelsum
+    
+    @lru_cache(maxsize=8192)
+    def h_pg_levelsum_cn(self, node: Node):
+        """This heuristic uses a planning graph representation of the problem
+        state space to estimate the sum of all actions that must be carried
+        out from the current state in order to satisfy each individual goal
+        condition.
+        """
+        # requires implemented PlanningGraph class
+        pg = PlanningGraph(self , node.state, inconsistent_effetcs_mutex=False,
+                                              interference_mutex=False)
+        pg_levelsum = pg.h_levelsum()
+        return pg_levelsum
+    
+    
         
 
 def build_expr(exp_type, arg1, arg2):
@@ -277,6 +322,9 @@ def cargo_problem_list_builder(cargos, planes, airports, pos_At):
                   ]
     
     neg = neg_at_cargo_list + neg_at_plane_list + neg_in_list
+    
+    print(pos)
+    print(neg)
     
     return (pos, neg)
     
