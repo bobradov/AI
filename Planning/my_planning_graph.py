@@ -399,22 +399,33 @@ class PlanningGraph():
         #   to see if a proposed PgNode_a has prenodes that are a subset of the previous S level.  Once an
         #   action node is added, it MUST be connected to the S node instances in the appropriate s_level set.
 
+        # Start timing
         start = time.time()
 
-        a_nodes = []
-        for action in self.all_actions:
-            # Build an action Node for this action
-            node_a = PgNode_a(action)
-            # For this action node to be reachable, its preconditions must be satisfied by the previous state level
-            if node_a.prenodes.issubset(self.s_levels[level]):
-                # Add this reachable action node to the list of action nodes
-                # Make this reachable action node a child of the preceding level's state nodes
-                # Make the preceding level's state nodes parents of this reachable action node
-                a_nodes.append(node_a)
-                for node_s in self.s_levels[level]:
-                    node_s.children.add(node_a)
-                    node_a.parents.add(node_s)
-        # Build the action level from the reachable action nodes
+        a_nodes = set()
+        
+        # All possible actions
+        for cur_act in self.all_actions:
+            # Temporary node associated with this action
+            # May or may not end up being stored
+            cur_a_node = PgNode_a(cur_act)
+            
+            # Are the preconditions of this actions completely
+            # contained in the s-levels of the parent level?
+            if cur_a_node.prenodes.issubset(self.s_levels[level]):
+                # if so, add the temporary node to the list 
+                # of action nodes
+                a_nodes.add(cur_a_node)
+          
+                for cur_s_node in self.s_levels[level]:
+                    # Connect a-nodes to previous s-level
+                    # And vice-versa
+                    if cur_s_node in cur_a_node.prenodes:
+                        cur_a_node.parents.add(cur_s_node)
+                        cur_s_node.children.add(cur_a_node)
+                    
+                    
+        # Add discovered a_nodes to a_level
         self.a_levels.append(a_nodes)
         
         end = time.time()
@@ -439,19 +450,26 @@ class PlanningGraph():
         #   all of the new S nodes as children of all the A nodes that could produce them, and likewise add the A nodes to the
         #   parent sets of the S nodes
         
+        # Start timing
         start = time.time()
         
         s_nodes = set()
-        for node_a in self.a_levels[level - 1]:
-            # Get the effect nodes for this preceding action and add them to the level's state nodes
-            for node_s in node_a.effnodes:
-                # Add this reachable effect node to the set of state nodes
-                # Make the preceding level's action node a parent of this reachable effect node
-                # Make this reachable effect node a child of the preceding action node
-                s_nodes.add(node_s)
-                node_s.parents.add(node_a)
-                node_a.children.add(node_s)
-        # Build the state level from the reachable effect nodes
+        # Find the actions from the preceding level
+        for cur_a_node in self.a_levels[level - 1]:
+            # Find s nodes that result from the actions
+            for cur_s_node in cur_a_node.effnodes:
+                # Add s-node to set of s-nodes for this level
+                s_nodes.add(cur_s_node)
+                
+                # Assign self as the child node of the parent node
+                cur_a_node.children.add(cur_s_node)
+                
+                # Assign the parent (action) node
+                cur_s_node.parents.add(cur_a_node)
+                
+                
+                
+        # Add all the state nodes to the s_levels
         self.s_levels.append(s_nodes)
         
         end = time.time()
@@ -473,12 +491,18 @@ class PlanningGraph():
         :return:
             mutex set in each PgNode_a in the set is appropriately updated
         """
-        
+        # Start timing
         start = time.time()
         
         nodelist = list(nodeset)
         for i, n1 in enumerate(nodelist[:-1]):
             for n2 in nodelist[i + 1:]:
+                # Broken into separate if statements to make sure
+                # mutex checks are done as soon as one is found
+                # Not clear whether python evaluates all 'or-ed'
+                # statements before declaring True after finding
+                # that one of them is true (although no real performance
+                # effect foound)
                 if (self.serialize_actions(n1, n2)):
                     mutexify(n1, n2)
                     continue
@@ -528,20 +552,20 @@ class PlanningGraph():
         :return: bool
         """
         
+        # For debugging
         if not self.inconsistent_effects_mutex_flag: return False
         
         # TODO test for Inconsistent Effects between nodes
-        # Make sure node_a1's (+) effects aren't canceled by node_a2's (-) effects
-        # Convert to subset test
-        for effect in node_a1.action.effect_add:
-            if effect in node_a2.action.effect_rem:
-                return True
+    
+        # Does a2 remove the effect that a1 adds?
+        for cur_eff in node_a1.action.effect_add:
+            if cur_eff in node_a2.action.effect_rem: return True
 
-        # Make sure node_a2's (+) effects aren't canceled by node_a1's (-) effects
-        for effect in node_a2.action.effect_add:
-            if effect in node_a1.action.effect_rem:
-                return True
+        # Does a1 remove effect that a2 adds?
+        for cur_eff in node_a2.action.effect_add:
+            if cur_eff in node_a1.action.effect_rem: return True
 
+        # No clashing effects found
         return False
 
     def interference_mutex(self, node_a1: PgNode_a, node_a2: PgNode_a) -> bool:
@@ -561,27 +585,31 @@ class PlanningGraph():
         # TODO test for Interference between nodes
         
         
+        # For debugging, test the effect of intereference mutex
         if not self.interference_mutex_flag: return False
         
-        
+        # Start timimg
         start = time.time()
         
+       
+        # Effects of a1 as negative preconditions of a2 
+        for cur_eff in node_a1.action.effect_add:
+            if cur_eff in node_a2.action.precond_neg: return True
+                
         
-        for effect in node_a1.action.effect_add:
-            if effect in node_a2.action.precond_neg:
-                return True
-        for effect in node_a2.action.effect_add:
-            if effect in node_a1.action.precond_neg:
-                return True
+        # Effects of a2 as negative preconditions of a1
+        for cur_eff in node_a2.action.effect_add:
+            if cur_eff in node_a1.action.precond_neg: return True
+                
 
-        # Make sure node_a1's (-) effects don't conflict with node_a2's (+) preconditions
-        # Make sure node_a2's (-) effects don't conflict with node_a1's (+) preconditions
-        for effect in node_a1.action.effect_rem:
-            if effect in node_a2.action.precond_pos:
-                return True
-        for effect in node_a2.action.effect_rem:
-            if effect in node_a1.action.precond_pos:
-                return True
+        # Effects removed by a1 as preconditions for a2
+        for cur_eff in node_a1.action.effect_rem:
+            if cur_eff in node_a2.action.precond_pos: return True
+                
+        # Effects removed by a2 as preconditions for a1
+        for cur_eff in node_a2.action.effect_rem:
+            if cur_eff in node_a1.action.precond_pos: return True
+                
             
         end = time.time()
         add_to_timer('interference_mutex', end-start)
@@ -600,17 +628,24 @@ class PlanningGraph():
         :return: bool
         """
        
+        # For debugging: check impact of competing_needs_mutex
         if not self.competing_needs_mutex_flag: return False
         
-        # TODO test for Competing Needs between nodes
-        # Make sure node_a1's preconditions aren't mutually exclusive with node_a2's preconditions
+        # Start timing
         start = time.time()
-        for precond_a1 in node_a1.parents:
-            for precond_a2 in node_a2.parents:
-                if precond_a1.is_mutex(precond_a2):
-                    end = time.time()
-                    add_to_timer('competing_nodes_mutex', end-start)
-                    return True
+        
+        # Form pairs of preconditions for node_a1, node_a2
+        prec_pairs = [(cur_prec_a1, cur_prec_a2)
+                      for cur_prec_a1 in node_a1.parents
+                      for cur_prec_a2 in node_a2.parents]
+        
+        # If any of the pairs of preconditions are mutually exclusive,
+        # tag the nodes as being mutex
+        for cur_pair in prec_pairs:
+            if cur_pair[0].is_mutex(cur_pair[1]):
+                end = time.time()
+                add_to_timer('competing_needs_mutex', end-start)
+                return True
 
         end = time.time()
         add_to_timer('competing_needes_mutex', end-start)
@@ -657,8 +692,16 @@ class PlanningGraph():
         :return: bool
         """
         # TODO test for negation between nodes
-         # Make sure two state literals don't have opposite polarity
-        return node_s1.symbol == node_s2.symbol and node_s1.is_pos != node_s2.is_pos
+        # If the literal is the same, the logic value should also
+        # be the same
+        
+        if node_s1.symbol == node_s2.symbol:
+            if node_s1.is_pos != node_s2.is_pos:
+                return True
+        else:
+            return False
+        
+        #return node_s1.symbol == node_s2.symbol and node_s1.is_pos != node_s2.is_pos
        
 
     def inconsistent_support_mutex(self, node_s1: PgNode_s, node_s2: PgNode_s):
@@ -680,15 +723,19 @@ class PlanningGraph():
         # TODO test for Inconsistent Support between nodes
         # Make sure node_s1's preconditions aren't mutually exclusive with node_s2's preconditions
         
-        
+        # Start timing
         start = time.time()
         
-        for precond_s1 in node_s1.parents:
-            for precond_s2 in node_s2.parents:
-                if not precond_s1.is_mutex(precond_s2):
-                    end = time.time()
-                    add_to_timer('inconsistent_support_mutex', end-start)
-                    return False
+        # Build list of pairs of preconditions
+        prec_list = [(prec_s1, prec_s2)
+                     for prec_s1 in node_s1.parents
+                     for prec_s2 in node_s2.parents]
+        
+        for cur_pair in prec_list:
+            if not cur_pair[0].is_mutex(cur_pair[1]):
+                end = time.time()
+                add_to_timer('inconsistent_support_mutex', end-start)
+                return False
 
         end = time.time()
         add_to_timer('inconsistent_support_mutex', end-start)
@@ -702,41 +749,33 @@ class PlanningGraph():
         level_sum = 0
         # TODO implement
         
-        # For each goal in the problem, determine their level cost, then add them together
+        # For each goal in the problem, determine their level cost, 
+        # then add the costs together
         # This implementation assumes all goals are positive
         # Is this a good assumption?
         
-        
+        # Start timing
         start = time.time()
         
-        '''
-        for goal in self.problem.goal:
-            #print('Working on goal ...', goal)
-            goal_found = False
-            for level in range(len(self.s_levels)):
-                for state in self.s_levels[level]:
-                    #print('Working on state ...', state.symbol)
-                    if goal == state.symbol and state.is_pos:
-                        goal_found = True
-                        level_sum += level
-                        break
-                if goal_found:
-                    break
-                
-        
-        
-        '''
+        # Goals found so far
         found_goals = set()
-        while len(found_goals) < len(self.problem.goal):
-            for level, state_set in enumerate(self.s_levels):
-                # FIXME: may want to iterative over goals
-                # and check against states, instead of the other way around
-                for cur_state in state_set:
-                    # FIXME: may also need to check for negative goals
-                    if (cur_state.is_pos and cur_state.symbol in self.problem.goal 
-                                     and cur_state.symbol not in found_goals):
-                        found_goals.add(cur_state.symbol)
-                        level_sum += level
+        
+        # Loop though all s-levels, checking whether
+        # any states match goal states
+        # If so, add them to the 'found_goals', and increment
+        # level cost
+        for level, state_set in enumerate(self.s_levels):
+            for cur_state in state_set:
+                # Assumes all goals positive
+                if (cur_state.is_pos and cur_state.symbol in self.problem.goal 
+                                 and cur_state.symbol not in found_goals):
+                    found_goals.add(cur_state.symbol)
+                    level_sum += level
+                    
+        # Did we find everything?
+        # Maybe some goals are unattainable ...
+        if len(found_goals) != len(self.problem.goal):
+           return float('inf')
            
         end = time.time()
         add_to_timer('h_levelsum', end-start)

@@ -68,19 +68,35 @@ class AirCargoProblem(Problem):
             loads = []
             # TODO create all load ground actions from the domain Load action
             
-            for c in self.cargos:
-                for p in self.planes:
-                    for a in self.airports:
-                        precond_pos = [expr("At({}, {})".format(c, a)),
-                                       expr("At({}, {})".format(p, a)),
-                                       ]
-                        precond_neg = []
-                        effect_add = [expr("In({}, {})".format(c, p))]
-                        effect_rem = [expr("At({}, {})".format(c, a))]
-                        load = Action(expr("Load({}, {}, {})".format(c, p, a)),
-                                      [precond_pos, precond_neg],
-                                      [effect_add, effect_rem])
-                        loads.append(load)
+            # Form triplets of cargo, planes, airports
+            cta_list = [(cur_cargo, cur_plane, cur_airport)
+                        for cur_airport in self.airports
+                        for cur_plane in self.planes
+                        for cur_cargo in self.cargos]
+            
+            
+            # Build all possible actions
+            for cargo, plane, air in cta_list:
+                
+                # Positive preconditions
+                # (no negative preconditions)
+                pos_prec = [expr("At({}, {})".format(cargo, air)),
+                            expr("At({}, {})".format(plane, air))]
+                
+                add_effect = [expr("In({}, {})".format(cargo, plane))]
+                rem_effect = [expr("At({}, {})".format(cargo, air))]
+               
+                # Empty list for negative preconditions
+                # Build complete Action
+                cur_load = Action(expr("Load({}, {}, {})".format(cargo, 
+                                                                 plane, 
+                                                                 air)),
+                                              [pos_prec, []],
+                                              [add_effect, rem_effect])
+                
+                loads.append(cur_load)
+            
+           
             
             return loads
 
@@ -92,20 +108,30 @@ class AirCargoProblem(Problem):
             unloads = []
             # TODO create all Unload ground actions from the domain Unload action
             
-            for c in self.cargos:
-                for p in self.planes:
-                    for a in self.airports:
-                        precond_pos = [expr("In({}, {})".format(c, p)),
-                                       expr("At({}, {})".format(p, a)),
-                                       ]
-                        precond_neg = []
-                        effect_add = [expr("At({}, {})".format(c, a))]
-                        effect_rem = [expr("In({}, {})".format(c, p))]
-                        unload = Action(expr("Unload({}, {}, {})".format(c, p, a)),
-                                        [precond_pos, precond_neg],
-                                        [effect_add, effect_rem])
-                        unloads.append(unload)
             
+            # Form triplets of cargo, planes, airports
+            cta_list = [(cur_cargo, cur_plane, cur_airport)
+                        for cur_airport in self.airports
+                        for cur_plane in self.planes
+                        for cur_cargo in self.cargos]
+            
+            # Build all possible actions
+            for cargo, plane, air in cta_list:
+                pos_prec = [expr("In({}, {})".format(cargo, plane)),
+                            expr("At({}, {})".format(plane, air))]
+                
+                add_effect = [expr("At({}, {})".format(cargo, air))]
+                rem_effect = [expr("In({}, {})".format(cargo, plane))]
+                
+                # Empty list for negative preconditions
+                # Build complete Action
+                cur_unload = Action(expr("Unload({}, {}, {})".format(cargo, 
+                                                                     plane, 
+                                                                     air)),
+                                [pos_prec, []],
+                                [add_effect, rem_effect])
+                
+                unloads.append(cur_unload)
             
             return unloads
 
@@ -143,16 +169,17 @@ class AirCargoProblem(Problem):
         # TODO implement
         possible_actions = []
         
+        # Shamelessly copied from "example_have_cake.py"
+        # due to identical functionality
+        
         kb = PropKB()
         kb.tell(decode_state(state, self.state_map).pos_sentence())
         for action in self.actions_list:
             is_possible = True
             for clause in action.precond_pos:
-                if clause not in kb.clauses:
-                    is_possible = False
+                if clause not in kb.clauses: is_possible = False
             for clause in action.precond_neg:
-                if clause in kb.clauses:
-                    is_possible = False
+                if clause in kb.clauses: is_possible = False
             if is_possible:
                 possible_actions.append(action)
         
@@ -167,7 +194,11 @@ class AirCargoProblem(Problem):
         :param action: Action applied
         :return: resulting state after action
         """
+        
+        
         # TODO implement
+        # Shamelessly copied from "example_have_cake.py"
+        # due to identical functionality
         new_state = FluentState([], [])
         
         old_state = decode_state(state, self.state_map)
@@ -225,23 +256,19 @@ class AirCargoProblem(Problem):
         """
         # TODO implement (see Russell-Norvig Ed-3 10.2.3  or Russell-Norvig Ed-2 11.2)
        
+        # Create list of unmet goals
+        # The length of the list is the value of the heuristic
         unmet_goal_list = [cur_fluent
                            for cur_fluent in self.goal
                            if node.state[self.goal_lookup[cur_fluent]] == 'F']
         
         return len(unmet_goal_list)
         
-    '''
-    self.incosistent_effects_mutex = inconsistent_effects_mutex
-        self.interference_mutex = interference_mutex
-        self.competing_needs_mutex = competing_needs_mutex
-    '''
+   
     @lru_cache(maxsize=8192)
     def h_pg_levelsum_iem(self, node: Node):
-        """This heuristic uses a planning graph representation of the problem
-        state space to estimate the sum of all actions that must be carried
-        out from the current state in order to satisfy each individual goal
-        condition.
+        """Variant of the pg heuristic for analysis purposes.
+        Ignores interference_mutex and competing_needs_mutex check.
         """
         # requires implemented PlanningGraph class
         pg = PlanningGraph(self , node.state, interference_mutex=False,
@@ -251,10 +278,8 @@ class AirCargoProblem(Problem):
     
     @lru_cache(maxsize=8192)
     def h_pg_levelsum_int(self, node: Node):
-        """This heuristic uses a planning graph representation of the problem
-        state space to estimate the sum of all actions that must be carried
-        out from the current state in order to satisfy each individual goal
-        condition.
+        """Variant of the pg heuristic for analysis purposes.
+        Ignores inconsistent_effects_mutex and competing_needs_mutex check.
         """
         # requires implemented PlanningGraph class
         pg = PlanningGraph(self , node.state, inconsistent_effects_mutex=False,
@@ -264,10 +289,8 @@ class AirCargoProblem(Problem):
     
     @lru_cache(maxsize=8192)
     def h_pg_levelsum_cn(self, node: Node):
-        """This heuristic uses a planning graph representation of the problem
-        state space to estimate the sum of all actions that must be carried
-        out from the current state in order to satisfy each individual goal
-        condition.
+        """Variant of the pg heuristic for analysis purposes.
+        Ignores inconsistent_effects_mutex and interference_mutex check.
         """
         # requires implemented PlanningGraph class
         pg = PlanningGraph(self , node.state, inconsistent_effects_mutex=False,
@@ -278,13 +301,17 @@ class AirCargoProblem(Problem):
     
         
 
-def build_expr(exp_type, arg1, arg2):
-    return expr(exp_type + '('+ arg1 + ', ' + arg2+')') 
 
 
-def cargo_problem_list_builder(cargos, planes, airports, pos_At):
+
+def cargo_problem_list_builder(cargos, planes, airports, pos_At, goal):
+    
+    # Helper function for building expressions
+    def build_expr(exp_type, arg1, arg2):
+        return expr(exp_type + '('+ arg1 + ', ' + arg2+')') 
+    
     '''
-    Build 'positive' and 'negative' lists for cargo problems
+    Build air cargo problem
     
     Input: cargos: list of cargos
            planes: list of planes
@@ -292,30 +319,37 @@ def cargo_problem_list_builder(cargos, planes, airports, pos_At):
            pos_At: dictionary specifying locations of cargo and planes
                    key of dict is a cargo or plane, value is 
                    the airport location
+           goal  : dictionary specifying the goal location of cargo
                    
-    Returns: tuple (pos, neg) of positive and negative lists
+    Returns: AirCargoProblem object 
     '''
+    
+    
+    # Positive list is initial state
     pos = [ build_expr('At', cur_key, pos_At[cur_key])
             for cur_key in pos_At.keys() ]
     
-    
+    # Initialize neg_list (populated next)
     neg = []
     
     
-
+    # Negative 'At(C, A)' lists: set for any cargo not
+    # at a given airport
     neg_at_cargo_list = [build_expr('At', cur_cargo, cur_airport)
                             for cur_cargo in cargos
                             for cur_airport in airports
                             if pos_At[cur_cargo] != cur_airport 
                         ]
     
+    # 'At(P, A)' lists: set for any plane not at a given airport
     neg_at_plane_list = [build_expr('At', cur_plane, cur_airport)
                             for cur_plane in planes
                             for cur_airport in airports
                             if pos_At[cur_plane] != cur_airport
                         ]
 
-    
+    # Negative lists contains all 'In' literals
+    # Planes are initially unloaded
     neg_in_list = [build_expr('In', cur_cargo, cur_plane)
                     for cur_cargo in cargos
                     for cur_plane in planes
@@ -323,10 +357,14 @@ def cargo_problem_list_builder(cargos, planes, airports, pos_At):
     
     neg = neg_at_cargo_list + neg_at_plane_list + neg_in_list
     
-    print(pos)
-    print(neg)
+    # Build goal
+    goal_list = [build_expr('At', cur_cargo, goal[cur_cargo])
+                    for cur_cargo in goal.keys() ]
+                    
+    init = FluentState(pos, neg)
     
-    return (pos, neg)
+    return AirCargoProblem(cargos, planes, airports, init, goal_list)
+   
     
 
 def air_cargo_p1() -> AirCargoProblem:
@@ -350,14 +388,12 @@ def air_cargo_p1() -> AirCargoProblem:
                'P1' : 'SFO',
                'P2' : 'JFK' }
     
+    goal_dict = { 'C1' : 'JFK',
+                  'C2' : 'SFO' }
     
-    pos, neg = cargo_problem_list_builder(cargos, planes, airports, pos_At)
     
-    init = FluentState(pos, neg)
-    goal = [expr('At(C1, JFK)'),
-            expr('At(C2, SFO)'),
-            ]
-    return AirCargoProblem(cargos, planes, airports, init, goal)
+    return cargo_problem_list_builder(cargos, planes, 
+                                      airports, pos_At, goal_dict)
 
 
 def air_cargo_p2() -> AirCargoProblem:
@@ -387,19 +423,13 @@ def air_cargo_p2() -> AirCargoProblem:
                'P2' : 'JFK',
                'P3' : 'ATL' }
     
-    pos, neg = cargo_problem_list_builder(cargos, planes, airports, pos_At)
-    
    
+    goal_dict = { 'C1' : 'JFK',
+                  'C2' : 'SFO',
+                  'C3' : 'SFO' }
     
-    init = FluentState(pos, neg)
-    # List goals: C1 -> JFK and C2,C3 -> SFO
-    goal = [expr('At(C1, JFK)'),
-            expr('At(C2, SFO)'),
-            expr('At(C3, SFO)'),
-            ]
-    return AirCargoProblem(cargos, planes, airports, init, goal)
-  
-    
+    return cargo_problem_list_builder(cargos, planes, 
+                                      airports, pos_At, goal_dict)
 
 
 def air_cargo_p3() -> AirCargoProblem:
@@ -428,18 +458,11 @@ def air_cargo_p3() -> AirCargoProblem:
                'P1' : 'SFO',
                'P2' : 'JFK' }
     
+    goal_dict = { 'C1' : 'JFK',
+                  'C3' : 'JFK',
+                  'C2' : 'SFO',
+                  'C4' : 'SFO' }
     
-    pos, neg = cargo_problem_list_builder(cargos, planes, airports, pos_At)
-   
-   
-
     
-    init = FluentState(pos, neg)
-    # List goals: C1 -> JFK and C2,C3 -> SFO
-    goal = [expr('At(C1, JFK)'),
-            expr('At(C3, JFK)'),
-            expr('At(C2, SFO)'),
-            expr('At(C4, SFO)')
-            ]
-    
-    return AirCargoProblem(cargos, planes, airports, init, goal)
+    return cargo_problem_list_builder(cargos, planes, 
+                                      airports, pos_At, goal_dict)
