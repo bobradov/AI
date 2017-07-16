@@ -262,7 +262,8 @@ class PlanningGraph():
                  serial_planning=True,
                  inconsistent_effects_mutex=True,
                  interference_mutex=True,
-                 competing_needs_mutex=True
+                 competing_needs_mutex=True,
+                 compute_mutexes=True
                  ):
         """
         :param problem: PlanningProblem (or subclass such as AirCargoProblem or HaveCakeProblem)
@@ -287,9 +288,11 @@ class PlanningGraph():
         self.a_levels = []
         
         # Flags for setting which mutexes to use
+        # Or disable all mutex calculations with compute_mutexes
         self.inconsistent_effects_mutex_flag = inconsistent_effects_mutex
         self.interference_mutex_flag = interference_mutex
         self.competing_needs_mutex_flag = competing_needs_mutex
+        self.compute_mutexes = compute_mutexes
         
         self.create_graph()
         
@@ -369,11 +372,13 @@ class PlanningGraph():
         # i.e. until it is "leveled"
         while not leveled:
             self.add_action_level(level)
-            self.update_a_mutex(self.a_levels[level])
+            if self.compute_mutexes:
+                self.update_a_mutex(self.a_levels[level])
 
             level += 1
             self.add_literal_level(level)
-            self.update_s_mutex(self.s_levels[level])
+            if self.compute_mutexes:
+                self.update_s_mutex(self.s_levels[level])
 
             if self.s_levels[level] == self.s_levels[level - 1]:
                 leveled = True
@@ -752,7 +757,12 @@ class PlanningGraph():
         # For each goal in the problem, determine their level cost, 
         # then add the costs together
         # This implementation assumes all goals are positive
-        # Is this a good assumption?
+        # ALSO: this heuristic does NOT track mutexes
+        # There is no check to see that states which match goal
+        # states are not mutexed
+        # Because of this the pg_levelsum heuristic ultimately
+        # does not take advantage of the full complexity
+        # of the pg data structure.
         
         # Start timing
         start = time.time()

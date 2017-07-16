@@ -265,6 +265,19 @@ class AirCargoProblem(Problem):
         return len(unmet_goal_list)
         
    
+    
+    # Also create heuristics which are variants of the h_pg_levelsum, but
+    # skip the computation of the various mutexes.
+    # Since levelsum doesn't actually use mutexes in the evaluation of
+    # the heuristic, the mutex computation only ends up wasting time
+    # (at least until a metric that uses them is added).
+    # To understand how much time is used by the computation of the
+    # various mutexes, several options for turning off specific ones
+    # (or all of them) are implemented.
+    # Since the mutexes aren't actually used, all the pg_levelsum
+    # heuristics produces the same result, but take different amounts of
+    # time due to the overhead of computing mutexes.
+    
     @lru_cache(maxsize=8192)
     def h_pg_levelsum_iem(self, node: Node):
         """Variant of the pg heuristic for analysis purposes.
@@ -295,6 +308,17 @@ class AirCargoProblem(Problem):
         # requires implemented PlanningGraph class
         pg = PlanningGraph(self , node.state, inconsistent_effects_mutex=False,
                                               interference_mutex=False)
+        pg_levelsum = pg.h_levelsum()
+        return pg_levelsum
+    
+    
+    @lru_cache(maxsize=8192)
+    def h_pg_levelsum_nomutex(self, node: Node):
+        """Variant of the pg heuristic for analysis purposes.
+        Skips computation of all mutexes.
+        """
+        # requires implemented PlanningGraph class
+        pg = PlanningGraph(self , node.state, compute_mutexes=False)
         pg_levelsum = pg.h_levelsum()
         return pg_levelsum
     
@@ -356,6 +380,8 @@ def cargo_problem_list_builder(cargos, planes, airports, pos_At, goal):
                   ]
     
     neg = neg_at_cargo_list + neg_at_plane_list + neg_in_list
+    
+    print('Number of DOF in problem: ', len(pos) + len(neg))
     
     # Build goal
     goal_list = [build_expr('At', cur_cargo, goal[cur_cargo])
